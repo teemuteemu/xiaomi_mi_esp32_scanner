@@ -1,52 +1,68 @@
 #include <Arduino.h>
+#include <sstream>
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
 #include <BLEUUID.h>
 #include <BLEAdvertisedDevice.h>
 
+#include "../settings.h"
+
 #define PIN_LED (2)
 #define SCAN_TIME (5) // seconds
+boolean METRIC = true; //Set true for metric system; false for imperial
 
 BLEScan* pBLEScan;
-
-// Thermometers
-String addressList[] = {
-	"a4:c1:38:fd:d0:41",
-	"a4:c1:38:68:6d:e5",
-	"a4:c1:38:f0:bc:34"
-};
 
 class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 	void onResult(BLEAdvertisedDevice advertisedDevice) {
 		String currentDeviceAddress = advertisedDevice.getAddress().toString().c_str();
 
-		for (int i=0; i<sizeof(addressList)/sizeof(addressList[0]); i++) {
-			if (addressList[i].equalsIgnoreCase(currentDeviceAddress)) {
-				Serial.println(currentDeviceAddress);
+		for (int i=0; i<sizeof(miAddressList)/sizeof(miAddressList[0]); i++) {
+			if (miAddressList[i].equalsIgnoreCase(currentDeviceAddress)) {
 
 				if (advertisedDevice.haveServiceData()) {
 					String uuid(advertisedDevice.getServiceDataUUID().toString().c_str());
 
 					if (uuid.substring(4,8).equalsIgnoreCase("181a")) {
-						Serial.printf("%d - %d\n", advertisedDevice.getPayloadLength(), advertisedDevice.getPayload());
-						/*
-						std::string data = advertisedDevice.getServiceData();
+            uint8_t cServiceData[100];
+            uint8_t* payloadPtr = advertisedDevice.getPayload();
 
-						for (int j=0; j<data.length()-1; j++) {
-							int val = atoi(data.substr(j, j+1).c_str());
-							Serial.printf("%d", val);
-						}
-						Serial.println("");
-						*/
-						// int temperature = atoi(data.substr(0, 2).c_str());
-						// int humidity = atoi(data.substr(2, 3).c_str());
-						// int battery = atoi(data.substr(26, 30).c_str());
+            for (int i = 0; i<advertisedDevice.getPayloadLength(); i++) {
+              cServiceData[i] = *(payloadPtr + i);
+            }
 
-						// Serial.printf("temp: %d, hum: %d, batt: %d\n", temperature, humidity, battery);
+            /* payload:
+             *
+             * bytes   
+             * 10 - 11  temperature int16
+             * 12       humidity percentage
+             * 13       battery percentage
+             * 14 - 15  battery mV
+             * 16       frame packet
+             */
+
+            char outputBuff[128];
+            char charValue[5] = {0,};
+            unsigned long value;
+            sprintf(charValue, "%02X%02X", cServiceData[10], cServiceData[11]);
+            value = strtol(charValue, 0, 16);
+            float temperature = (float)value/10;
+
+            sprintf(charValue, "%02X", cServiceData[12]);
+            value = strtol(charValue, 0, 16);  
+            float humidity = (float)value;
+
+            sprintf(charValue, "%02X", cServiceData[13]);
+            value = strtol(charValue, 0, 16);                    
+
+            sprintf(outputBuff, "{\"device\":\"%s\",\"temperature\":%f,\"humidity\":%f,\"battery\":%lu}\n",
+                    advertisedDevice.getAddress().toString().c_str(),
+                    temperature,
+                    humidity,
+                    value);
+            Serial.println(outputBuff);
 					}
-					// Serial.println(uuid.substring(4,10).c_str());
-					// String data = advertisedDevice.getServiceData();
 				}
 			}
 		}
@@ -68,12 +84,6 @@ void setup() {
 
 void loop() {
 	BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME, false);
-	/*
-  Serial.print("Devices found: ");
-  Serial.println(foundDevices.getCount());
-  Serial.println("Scan done!");
-	getDevices(&foundDevices);
-	*/
   pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
 
 	digitalWrite(PIN_LED, HIGH);
