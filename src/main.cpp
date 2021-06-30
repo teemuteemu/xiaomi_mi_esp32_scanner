@@ -1,18 +1,15 @@
 #include <Arduino.h>
-#include <sstream>
 #include <BLEDevice.h>
-#include <BLEUtils.h>
 #include <BLEScan.h>
-#include <BLEUUID.h>
 #include <BLEAdvertisedDevice.h>
+#include <WiFi.h>
 
 #include "../settings.h"
 
 #define PIN_LED (2)
 #define SCAN_TIME (5) // seconds
-boolean METRIC = true; //Set true for metric system; false for imperial
 
-BLEScan* pBLEScan;
+boolean WIFI_CONNECTED = false;
 
 class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 	void onResult(BLEAdvertisedDevice advertisedDevice) {
@@ -69,25 +66,59 @@ class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 	}
 };
 
-void setup() {
-	pinMode(PIN_LED, OUTPUT);
-	Serial.begin(115200);
-	Serial.println("moi...");
+void bleTask(void* param) {
+  while (!WIFI_CONNECTED) {
+    vTaskDelay(200);
+  }
 
 	BLEDevice::init("");
+  BLEScan* pBLEScan;
   pBLEScan = BLEDevice::getScan(); //create new scan
   pBLEScan->setAdvertisedDeviceCallbacks(new AdvertisedDeviceCallbacks());
   pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);  // less or equal setInterval value
+
+  while (1) {
+    BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME, false);
+    pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
+  }
+}
+
+void wifiTask(void* param) {
+  WiFiClient wifiClient;
+  
+  vTaskDelay(10);
+  Serial.println();
+  Serial.printf("Connecting to %s", ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    vTaskDelay(500);
+    Serial.print(".");
+  }
+
+  Serial.println(WiFi.localIP());
+
+  WIFI_CONNECTED = true;
+
+  while (1) {
+
+  }
+}
+
+void setup() {
+	pinMode(PIN_LED, OUTPUT);
+	Serial.begin(115200);
+	Serial.println("moi...");
+  xTaskCreate(wifiTask, "WiFi", 10000, NULL, 1, NULL);
+  xTaskCreate(bleTask, "BLE", 10000, NULL, 1, NULL);
 }
 
 void loop() {
-	BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME, false);
-  pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
-
 	digitalWrite(PIN_LED, HIGH);
 	delay(100);
 	digitalWrite(PIN_LED, LOW);
-	delay(100);
+	delay(3000);
 }
