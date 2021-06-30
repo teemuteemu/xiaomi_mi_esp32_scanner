@@ -3,13 +3,16 @@
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 #include <WiFi.h>
+#include <PubSubClient.h>
 
 #include "../settings.h"
 
 #define PIN_LED (2)
 #define SCAN_TIME (5) // seconds
 
-boolean WIFI_CONNECTED = false;
+boolean MQTT_READY = false;
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
 
 class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 	void onResult(BLEAdvertisedDevice advertisedDevice) {
@@ -67,7 +70,7 @@ class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 };
 
 void bleTask(void* param) {
-  while (!WIFI_CONNECTED) {
+  while (!MQTT_READY) {
     vTaskDelay(200);
   }
 
@@ -86,8 +89,6 @@ void bleTask(void* param) {
 }
 
 void wifiTask(void* param) {
-  WiFiClient wifiClient;
-  
   vTaskDelay(10);
   Serial.println();
   Serial.printf("Connecting to %s", ssid);
@@ -100,8 +101,22 @@ void wifiTask(void* param) {
   }
 
   Serial.println(WiFi.localIP());
+  mqttClient.setServer(mqttBroker, 1883);
+  
+  while (!mqttClient.connected()) {
+    Serial.print("Attempting MQTT connection...");
 
-  WIFI_CONNECTED = true;
+    if (mqttClient.connect("ESP32")) {
+      Serial.println("connected");
+      MQTT_READY = true;
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      vTaskDelay(5000);
+    }
+  }
 
   while (1) {
 
