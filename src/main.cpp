@@ -10,6 +10,8 @@
 #define PIN_LED (2)
 #define SCAN_TIME (5) // seconds
 
+const char* MQTT_TOPIC = "midata";
+
 extern const uint8_t ca_crt_start[] asm("_binary_certs_ca_crt_start");
 extern const uint8_t ca_crt_end[] asm("_binary_certs_ca_crt_end");
 extern const uint8_t client_crt_start[] asm("_binary_certs_client_crt_start");
@@ -58,22 +60,20 @@ class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
                         value = strtol(charValue, 0, 16);
                         float temperature = (float)value/10;
 
-
                         sprintf(charValue, "%02X", cServiceData[12]);
                         value = strtol(charValue, 0, 16);  
                         float humidity = (float)value;
 
-
                         sprintf(charValue, "%02X", cServiceData[13]);
                         value = strtol(charValue, 0, 16);                    
-
 
                         sprintf(outputBuff, "{\"device\":\"%s\",\"temperature\":%f,\"humidity\":%f,\"battery\":%lu}\n",
                                 advertisedDevice.getAddress().toString().c_str(),
                                 temperature,
                                 humidity,
                                 value);
-                        Serial.println(outputBuff);
+                        // Serial.println(outputBuff);
+                        mqttClient.publish(MQTT_TOPIC, outputBuff);
                     }
                 }
             }
