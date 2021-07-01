@@ -2,7 +2,7 @@
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
-#include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 
 #include "../settings.h"
@@ -10,8 +10,15 @@
 #define PIN_LED (2)
 #define SCAN_TIME (5) // seconds
 
+extern const uint8_t ca_crt_start[] asm("_binary_certs_ca_crt_start");
+extern const uint8_t ca_crt_end[] asm("_binary_certs_ca_crt_end");
+extern const uint8_t client_crt_start[] asm("_binary_certs_client_crt_start");
+extern const uint8_t client_crt_end[] asm("_binary_certs_client_crt_end");
+extern const uint8_t client_key_start[] asm("_binary_certs_client_key_start");
+extern const uint8_t client_key_end[] asm("_binary_certs_client_key_end");
+
 boolean MQTT_READY = false;
-WiFiClient wifiClient;
+WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
 
 class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
@@ -104,11 +111,14 @@ void wifiTask(void* param) {
         vTaskDelay(500);
         Serial.print(".");
     }
+    wifiClient.setCACert((const char*)ca_crt_start);
+    wifiClient.setPrivateKey((const char*)client_key_start);	// for client verification
+    wifiClient.setCertificate((const char*)client_crt_start); // for client verification
+
 
     Serial.println(WiFi.localIP());
-    mqttClient.setServer(mqttBroker, 1883);
+    mqttClient.setServer(mqttBroker, mqttPort);
   
-
     while (!mqttClient.connected()) {
         Serial.print("Attempting MQTT connection...");
 
@@ -135,8 +145,9 @@ void setup() {
 }
 
 void loop() {
+    int lowDelay = MQTT_READY ? 3000 : 100;
     digitalWrite(PIN_LED, HIGH);
     delay(100);
     digitalWrite(PIN_LED, LOW);
-    delay(3000);
+    delay(lowDelay);
 }
