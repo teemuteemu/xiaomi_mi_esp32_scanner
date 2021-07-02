@@ -61,17 +61,23 @@ class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
                         float temperature = (float)value/10;
 
                         sprintf(charValue, "%02X", cServiceData[12]);
-                        value = strtol(charValue, 0, 16);  
+                        value = strtol(charValue, 0, 16);
                         float humidity = (float)value;
 
                         sprintf(charValue, "%02X", cServiceData[13]);
-                        value = strtol(charValue, 0, 16);                    
+                        value = strtol(charValue, 0, 16);
+                        unsigned long int battery = value;
 
-                        sprintf(outputBuff, "{\"device\":\"%s\",\"temperature\":%f,\"humidity\":%f,\"battery\":%lu}\n",
+                        sprintf(charValue, "%02X", cServiceData[16]);
+                        value = strtol(charValue, 0, 16);           
+
+                        sprintf(outputBuff, "{\"device\":\"%s\",\"temperature\":%f,\"humidity\":%f,\"battery\":%lu,\"frame\":%lu}\n",
                                 advertisedDevice.getAddress().toString().c_str(),
                                 temperature,
                                 humidity,
+                                battery,
                                 value);
+
                         // Serial.println(outputBuff);
                         mqttClient.publish(MQTT_TOPIC, outputBuff);
                     }
@@ -114,7 +120,6 @@ void wifiTask(void* param) {
     wifiClient.setCACert((const char*)ca_crt_start);
     wifiClient.setPrivateKey((const char*)client_key_start);	// for client verification
     wifiClient.setCertificate((const char*)client_crt_start); // for client verification
-
 
     Serial.println(WiFi.localIP());
     mqttClient.setServer(mqttBroker, mqttPort);
