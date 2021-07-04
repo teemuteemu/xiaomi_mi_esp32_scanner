@@ -23,64 +23,67 @@ boolean MQTT_READY = false;
 WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
 
+boolean hasData(BLEAdvertisedDevice* device) {
+    if (device->haveServiceData()) {
+        String uuid(device->getServiceDataUUID().toString().c_str());
+        return uuid.substring(4,8).equalsIgnoreCase("181a");
+    }
+    return false;
+}
+
 class AdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice) {
         String currentDeviceAddress = advertisedDevice.getAddress().toString().c_str();
 
         for (int i=0; i<sizeof(miAddressList)/sizeof(miAddressList[0]); i++) {
             if (miAddressList[i].equalsIgnoreCase(currentDeviceAddress)) {
-                if (advertisedDevice.haveServiceData()) {
-                    String uuid(advertisedDevice.getServiceDataUUID().toString().c_str());
+                if (hasData(&advertisedDevice)) {
+                    uint8_t cServiceData[100];
+                    uint8_t* payloadPtr = advertisedDevice.getPayload();
 
-					
-                    if (uuid.substring(4,8).equalsIgnoreCase("181a")) {
-                        uint8_t cServiceData[100];
-                        uint8_t* payloadPtr = advertisedDevice.getPayload();
-
-            
-                        for (int i = 0; i<advertisedDevice.getPayloadLength(); i++) {
-                            cServiceData[i] = *(payloadPtr + i);
-                        }
-
-            
-                        /* payload:
-                         *
-                         * bytes   
-                         * 10 - 11  temperature int16
-                         * 12       humidity percentage
-                         * 13       battery percentage
-                         * 14 - 15  battery mV
-                         * 16       frame packet
-                         */
-            
-                        char outputBuff[128];
-                        char charValue[5] = {0,};
-                        unsigned long value;
-                        sprintf(charValue, "%02X%02X", cServiceData[10], cServiceData[11]);
-                        value = strtol(charValue, 0, 16);
-                        float temperature = (float)value/10;
-
-                        sprintf(charValue, "%02X", cServiceData[12]);
-                        value = strtol(charValue, 0, 16);
-                        float humidity = (float)value;
-
-                        sprintf(charValue, "%02X", cServiceData[13]);
-                        value = strtol(charValue, 0, 16);
-                        unsigned long int battery = value;
-
-                        sprintf(charValue, "%02X", cServiceData[16]);
-                        value = strtol(charValue, 0, 16);           
-
-                        sprintf(outputBuff, "{\"device\":\"%s\",\"temperature\":%f,\"humidity\":%f,\"battery\":%lu,\"frame\":%lu}\n",
-                                advertisedDevice.getAddress().toString().c_str(),
-                                temperature,
-                                humidity,
-                                battery,
-                                value);
-
-                        // Serial.println(outputBuff);
-                        mqttClient.publish(MQTT_TOPIC, outputBuff);
+        
+                    for (int i = 0; i<advertisedDevice.getPayloadLength(); i++) {
+                        cServiceData[i] = *(payloadPtr + i);
                     }
+
+        
+                    /* payload:
+                     *
+                     * bytes   
+                     * 10 - 11  temperature int16
+                     * 12       humidity percentage
+                     * 13       battery percentage
+                     * 14 - 15  battery mV
+                     * 16       frame packet
+                     */
+        
+                    char outputBuff[128];
+                    char charValue[5] = {0,};
+                    unsigned long value;
+                    sprintf(charValue, "%02X%02X", cServiceData[10], cServiceData[11]);
+                    value = strtol(charValue, 0, 16);
+                    float temperature = (float)value/10;
+
+                    sprintf(charValue, "%02X", cServiceData[12]);
+                    value = strtol(charValue, 0, 16);
+                    float humidity = (float)value;
+
+                    sprintf(charValue, "%02X", cServiceData[13]);
+                    value = strtol(charValue, 0, 16);
+                    unsigned long int battery = value;
+
+                    sprintf(charValue, "%02X", cServiceData[16]);
+                    value = strtol(charValue, 0, 16);           
+
+                    sprintf(outputBuff, "{\"device\":\"%s\",\"temperature\":%f,\"humidity\":%f,\"battery\":%lu,\"frame\":%lu}\n",
+                            advertisedDevice.getAddress().toString().c_str(),
+                            temperature,
+                            humidity,
+                            battery,
+                            value);
+
+                    // Serial.println(outputBuff);
+                    mqttClient.publish(MQTT_TOPIC, outputBuff);
                 }
             }
         }
